@@ -17,7 +17,7 @@ declare global {
  * Verifies the JWT in the Authorization header and attaches the decoded
  * payload to `req.user`. Rejects with 401 if missing or invalid.
  */
-export function authenticate(req: Request, res: Response, next: NextFunction): void {
+export async function authenticate(req: Request, res: Response, next: NextFunction): Promise<void> {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -30,9 +30,11 @@ export function authenticate(req: Request, res: Response, next: NextFunction): v
   try {
     const payload = verifyToken(token);
     const db = getDb();
-    const user = db
-      .prepare('SELECT id, role, is_active FROM users WHERE id = ?')
-      .get(payload.userId) as Pick<User, 'id' | 'role' | 'is_active'> | undefined;
+    const userResult = await db.query(
+      'SELECT id, role, is_active FROM users WHERE id = $1',
+      [payload.userId]
+    );
+    const user = userResult.rows[0] as Pick<User, 'id' | 'role' | 'is_active'> | undefined;
 
     if (!user) {
       sendError(res, 401, 'Unauthorized', 'User no longer exists.');

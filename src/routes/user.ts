@@ -32,11 +32,11 @@ router.use(authenticate, requireRole(Role.ADMIN));
  *       403:
  *         description: Forbidden
  */
-router.get('/', (req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
     const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
-    sendSuccess(res, userService.listUsers(page, limit));
+    sendSuccess(res, await userService.listUsers(page, limit));
   } catch (err: unknown) {
     const e = err as Error & { status?: number };
     sendError(res, e.status ?? 500, 'Error', e.message);
@@ -60,9 +60,9 @@ router.get('/', (req: Request, res: Response) => {
  *       404:
  *         description: Not found
  */
-router.get('/:id', (req: Request, res: Response) => {
+router.get('/:id', async (req: Request, res: Response) => {
   try {
-    sendSuccess(res, userService.getUserById(req.params.id));
+    sendSuccess(res, await userService.getUserById(req.params.id));
   } catch (err: unknown) {
     const e = err as Error & { status?: number };
     sendError(res, e.status ?? 500, 'Error', e.message);
@@ -137,9 +137,9 @@ router.patch(
   '/:id',
   updateUserValidator,
   handleValidationErrors,
-  (req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
     try {
-      sendSuccess(res, userService.updateUser(req.params.id, req.body));
+      sendSuccess(res, await userService.updateUser(req.params.id, req.body));
     } catch (err: unknown) {
       const e = err as Error & { status?: number };
       sendError(res, e.status ?? 500, 'Error', e.message);
@@ -164,14 +164,14 @@ router.patch(
  *       404:
  *         description: Not found
  */
-router.delete('/:id', (req: Request, res: Response) => {
+router.delete('/:id', async (req: Request, res: Response) => {
   try {
     // Prevent admin from deleting themselves
     if (req.params.id === req.user!.userId) {
       sendError(res, 400, 'Bad Request', 'You cannot delete your own account.');
       return;
     }
-    userService.deleteUser(req.params.id);
+    await userService.deleteUser(req.params.id);
     res.status(204).send();
   } catch (err: unknown) {
     const e = err as Error & { status?: number };

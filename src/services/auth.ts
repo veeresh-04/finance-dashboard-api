@@ -22,11 +22,9 @@ export class AuthService {
   async register(dto: CreateUserDTO): Promise<AuthResponse> {
     const db = getDb();
 
-    const existing = db
-      .prepare('SELECT id FROM users WHERE email = ?')
-      .get(dto.email);
+    const existing = await db.query('SELECT id FROM users WHERE email = $1', [dto.email]);
 
-    if (existing) {
+    if (existing.rowCount) {
       throw Object.assign(new Error('Email already in use.'), { status: 409 });
     }
 
@@ -34,14 +32,13 @@ export class AuthService {
     const id = uuidv4();
     const role = Role.VIEWER;
 
-    db.prepare(`
+    await db.query(`
       INSERT INTO users (id, name, email, password_hash, role)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(id, dto.name, dto.email, password_hash, role);
+      VALUES ($1, $2, $3, $4, $5)
+    `, [id, dto.name, dto.email, password_hash, role]);
 
-    const user = db
-      .prepare('SELECT * FROM users WHERE id = ?')
-      .get(id) as User;
+    const userResult = await db.query('SELECT * FROM users WHERE id = $1', [id]);
+    const user = userResult.rows[0] as User;
 
     const token = signToken({ userId: user.id, role: user.role });
     return { token, user: toPublic(user) };
@@ -50,9 +47,8 @@ export class AuthService {
   async login(dto: LoginDTO): Promise<AuthResponse> {
     const db = getDb();
 
-    const user = db
-      .prepare('SELECT * FROM users WHERE email = ?')
-      .get(dto.email) as User | undefined;
+    const userResult = await db.query('SELECT * FROM users WHERE email = $1', [dto.email]);
+    const user = userResult.rows[0] as User | undefined;
 
     // Use constant-time comparison even on miss to prevent timing attacks
     const hashToCompare = user?.password_hash ?? '$2b$10$invalidhashfortimingprotection';
@@ -70,11 +66,10 @@ export class AuthService {
     return { token, user: toPublic(user) };
   }
 
-  getProfile(userId: string): UserPublic {
+  async getProfile(userId: string): Promise<UserPublic> {
     const db = getDb();
-    const user = db
-      .prepare('SELECT * FROM users WHERE id = ?')
-      .get(userId) as User | undefined;
+    const userResult = await db.query('SELECT * FROM users WHERE id = $1', [userId]);
+    const user = userResult.rows[0] as User | undefined;
 
     if (!user) {
       throw Object.assign(new Error('User not found.'), { status: 404 });

@@ -9,7 +9,7 @@ describe('Dashboard Routes', () => {
   let viewerToken: string;
 
   beforeAll(async () => {
-    app = setupTestApp();
+    app = await setupTestApp();
 
     const adminRes = await seedTestUser({
       name: 'Admin',
@@ -45,8 +45,8 @@ describe('Dashboard Routes', () => {
     }
   });
 
-  afterAll(() => {
-    teardownTestApp();
+  afterAll(async () => {
+    await teardownTestApp();
   });
 
   describe('GET /api/v1/dashboard/summary', () => {

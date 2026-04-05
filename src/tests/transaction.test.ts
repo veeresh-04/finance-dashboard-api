@@ -11,7 +11,7 @@ describe('Transaction Routes', () => {
   let createdTxId: string;
 
   beforeAll(async () => {
-    app = setupTestApp();
+    app = await setupTestApp();
 
     const adminRes = await seedTestUser({
       name: 'Admin',
@@ -38,8 +38,8 @@ describe('Transaction Routes', () => {
     analystToken = analystRes.token;
   });
 
-  afterAll(() => {
-    teardownTestApp();
+  afterAll(async () => {
+    await teardownTestApp();
   });
 
   const sampleTx = {

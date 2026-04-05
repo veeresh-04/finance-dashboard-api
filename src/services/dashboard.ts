@@ -11,82 +11,93 @@ function rowToTransaction(row: Record<string, unknown>): Transaction {
 }
 
 export class DashboardService {
-  getSummary(dateFrom?: string, dateTo?: string): DashboardSummary {
+  async getSummary(dateFrom?: string, dateTo?: string): Promise<DashboardSummary> {
     const db = getDb();
 
-    const dateConditions: string[] = ['is_deleted = 0'];
+    const dateConditions: string[] = ['is_deleted = FALSE'];
     const dateParams: unknown[] = [];
 
-    if (dateFrom) { dateConditions.push('date >= ?'); dateParams.push(dateFrom); }
-    if (dateTo)   { dateConditions.push('date <= ?'); dateParams.push(dateTo); }
+    if (dateFrom) { dateConditions.push(`date >= $${dateParams.length + 1}`); dateParams.push(dateFrom); }
+    if (dateTo)   { dateConditions.push(`date <= $${dateParams.length + 1}`); dateParams.push(dateTo); }
 
     const dateWhere = `WHERE ${dateConditions.join(' AND ')}`;
     const trendConditions = [...dateConditions];
     const trendParams = [...dateParams];
 
     if (!dateFrom && !dateTo) {
-      trendConditions.push("date >= date('now', '-12 months')");
+      trendConditions.push("date >= CURRENT_DATE - INTERVAL '12 months'");
     }
 
     const trendWhere = `WHERE ${trendConditions.join(' AND ')}`;
 
     // ── Totals ──────────────────────────────────────────────────────────────
-    const totals = db.prepare(`
+    const totalsResult = await db.query(`
       SELECT
         COALESCE(SUM(CASE WHEN type = 'income'  THEN amount ELSE 0 END), 0) AS total_income,
         COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) AS total_expenses,
-        COUNT(*) AS transaction_count
+        COUNT(*)::int AS transaction_count
       FROM transactions
       ${dateWhere}
-    `).get(...dateParams) as {
+    `, dateParams);
+    const totals = totalsResult.rows[0] as {
       total_income: number;
       total_expenses: number;
       transaction_count: number;
     };
 
     // ── Category breakdowns ──────────────────────────────────────────────────
-    const incomeByCategory = db.prepare(`
-      SELECT category, SUM(amount) AS total, COUNT(*) AS count
+    const incomeByCategoryResult = await db.query(`
+      SELECT category, SUM(amount) AS total, COUNT(*)::int AS count
       FROM transactions
       ${dateWhere} AND type = 'income'
       GROUP BY category
       ORDER BY total DESC
-    `).all(...dateParams) as CategoryTotal[];
+    `, dateParams);
+    const incomeByCategory = incomeByCategoryResult.rows as CategoryTotal[];
 
-    const expenseByCategory = db.prepare(`
-      SELECT category, SUM(amount) AS total, COUNT(*) AS count
+    const expenseByCategoryResult = await db.query(`
+      SELECT category, SUM(amount) AS total, COUNT(*)::int AS count
       FROM transactions
       ${dateWhere} AND type = 'expense'
       GROUP BY category
       ORDER BY total DESC
-    `).all(...dateParams) as CategoryTotal[];
+    `, dateParams);
+    const expenseByCategory = expenseByCategoryResult.rows as CategoryTotal[];
 
     // ── Monthly trends (last 12 months) ─────────────────────────────────────
-    const monthlyRaw = db.prepare(`
+    const monthlyRawResult = await db.query(`
       SELECT
-        strftime('%Y-%m', date) AS month,
+        EXTRACT(YEAR FROM date)::int AS year_num,
+        EXTRACT(MONTH FROM date)::int AS month_num,
         COALESCE(SUM(CASE WHEN type = 'income'  THEN amount ELSE 0 END), 0) AS income,
         COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) AS expenses
       FROM transactions
       ${trendWhere}
-      GROUP BY month
-      ORDER BY month ASC
-    `).all(...trendParams) as { month: string; income: number; expenses: number }[];
+      GROUP BY year_num, month_num
+      ORDER BY year_num ASC, month_num ASC
+    `, trendParams);
+    const monthlyRaw = monthlyRawResult.rows as {
+      year_num: number;
+      month_num: number;
+      income: number;
+      expenses: number;
+    }[];
 
     const monthly_trends: MonthlyTrend[] = monthlyRaw.map((r) => ({
-      month: r.month,
+      month: `${r.year_num}-${String(r.month_num).padStart(2, '0')}`,
       income: r.income,
       expenses: r.expenses,
       net: r.income - r.expenses,
     }));
 
     // ── Recent transactions (10 most recent) ────────────────────────────────
-    const recentRows = db.prepare(`
+    const recentRowsResult = await db.query(`
       SELECT * FROM transactions
       ${dateWhere}
       ORDER BY date DESC, created_at DESC
       LIMIT 10
-    `).all(...dateParams) as Record<string, unknown>[];
+    `, dateParams);
+    const recentRows = recentRowsResult.rows as Record<string, unknown>[];
 
     const recent_transactions = recentRows.map(rowToTransaction);
 

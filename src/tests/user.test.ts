@@ -10,7 +10,7 @@ describe('User Routes', () => {
   let createdUserId: string;
 
   beforeAll(async () => {
-    app = setupTestApp();
+    app = await setupTestApp();
 
     const adminRes = await seedTestUser({
       name: 'Admin',
@@ -29,8 +29,8 @@ describe('User Routes', () => {
     viewerToken = viewerRes.token;
   });
 
-  afterAll(() => {
-    teardownTestApp();
+  afterAll(async () => {
+    await teardownTestApp();
   });
 
   describe('GET /api/v1/users (Admin only)', () => {

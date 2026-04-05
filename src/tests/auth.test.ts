@@ -7,12 +7,12 @@ describe('Auth Routes', () => {
   let app: Application;
   let adminToken: string;
 
-  beforeAll(() => {
-    app = setupTestApp();
+  beforeAll(async () => {
+    app = await setupTestApp();
   });
 
-  afterAll(() => {
-    teardownTestApp();
+  afterAll(async () => {
+    await teardownTestApp();
   });
 
   const adminUser = {

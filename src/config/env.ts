@@ -15,5 +15,7 @@ export const JWT_SECRET = NODE_ENV === 'production'
   ? requireEnv('JWT_SECRET')
   : requireEnv('JWT_SECRET', 'dev-secret-key');
 export const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN ?? '7d';
-export const DB_PATH = process.env.DB_PATH ?? './data/finance.db';
+export const DATABASE_URL = NODE_ENV === 'test'
+  ? process.env.DATABASE_URL ?? 'postgresql://postgres:postgres@localhost:5432/finance_dashboard_test'
+  : requireEnv('DATABASE_URL');
 export const IS_TEST = NODE_ENV === 'test';

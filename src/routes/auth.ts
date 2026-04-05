@@ -101,9 +101,9 @@ router.post(
  *       401:
  *         description: Unauthorized
  */
-router.get('/me', authenticate, (req: Request, res: Response) => {
+router.get('/me', authenticate, async (req: Request, res: Response) => {
   try {
-    const user = authService.getProfile(req.user!.userId);
+    const user = await authService.getProfile(req.user!.userId);
     sendSuccess(res, user);
   } catch (err: unknown) {
     const e = err as Error & { status?: number };

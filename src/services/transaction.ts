@@ -18,7 +18,7 @@ function rowToTransaction(row: Record<string, unknown>): Transaction {
 }
 
 export class TransactionService {
-  list(filters: TransactionFilters): PaginatedResult<Transaction> {
+  async list(filters: TransactionFilters): Promise<PaginatedResult<Transaction>> {
     const db = getDb();
     const page = filters.page ?? 1;
     const limit = filters.limit ?? 20;
@@ -26,13 +26,17 @@ export class TransactionService {
 
     const { whereClause, params } = this.buildWhereClause(filters);
 
-    const total = (
-      db.prepare(`SELECT COUNT(*) as count FROM transactions ${whereClause}`).get(...params) as { count: number }
-    ).count;
+    const totalResult = await db.query(
+      `SELECT COUNT(*)::int as count FROM transactions ${whereClause}`,
+      params
+    );
+    const total = (totalResult.rows[0] as { count: number }).count;
 
-    const rows = db
-      .prepare(`SELECT * FROM transactions ${whereClause} ORDER BY date DESC, created_at DESC LIMIT ? OFFSET ?`)
-      .all(...params, limit, offset) as Record<string, unknown>[];
+    const rowsResult = await db.query(
+      `SELECT * FROM transactions ${whereClause} ORDER BY date DESC, created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+      [...params, limit, offset]
+    );
+    const rows = rowsResult.rows as Record<string, unknown>[];
 
     return {
       data: rows.map(rowToTransaction),
@@ -40,11 +44,13 @@ export class TransactionService {
     };
   }
 
-  getById(id: string): Transaction {
+  async getById(id: string): Promise<Transaction> {
     const db = getDb();
-    const row = db
-      .prepare('SELECT * FROM transactions WHERE id = ? AND is_deleted = 0')
-      .get(id) as Record<string, unknown> | undefined;
+    const rowResult = await db.query(
+      'SELECT * FROM transactions WHERE id = $1 AND is_deleted = FALSE',
+      [id]
+    );
+    const row = rowResult.rows[0] as Record<string, unknown> | undefined;
 
     if (!row) {
       throw Object.assign(new Error('Transaction not found.'), { status: 404 });
@@ -53,101 +59,105 @@ export class TransactionService {
     return rowToTransaction(row);
   }
 
-  create(dto: CreateTransactionDTO, userId: string): Transaction {
+  async create(dto: CreateTransactionDTO, userId: string): Promise<Transaction> {
     const db = getDb();
     const id = uuidv4();
     const date = typeof dto.date === 'object'
       ? (dto.date as Date).toISOString().split('T')[0]
       : dto.date;
 
-    db.prepare(`
+    await db.query(`
       INSERT INTO transactions (id, amount, type, category, date, notes, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(id, dto.amount, dto.type, dto.category, date, dto.notes ?? null, userId);
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `, [id, dto.amount, dto.type, dto.category, date, dto.notes ?? null, userId]);
 
-    return this.getById(id);
+    return await this.getById(id);
   }
 
-  update(id: string, dto: UpdateTransactionDTO): Transaction {
+  async update(id: string, dto: UpdateTransactionDTO): Promise<Transaction> {
     const db = getDb();
-    const existing = db
-      .prepare('SELECT * FROM transactions WHERE id = ? AND is_deleted = 0')
-      .get(id);
+    const existing = await db.query(
+      'SELECT id FROM transactions WHERE id = $1 AND is_deleted = FALSE',
+      [id]
+    );
 
-    if (!existing) {
+    if (!existing.rowCount) {
       throw Object.assign(new Error('Transaction not found.'), { status: 404 });
     }
 
     const fields: string[] = [];
     const values: unknown[] = [];
+    let index = 1;
 
-    if (dto.amount !== undefined)   { fields.push('amount = ?');   values.push(dto.amount); }
-    if (dto.type !== undefined)     { fields.push('type = ?');     values.push(dto.type); }
-    if (dto.category !== undefined) { fields.push('category = ?'); values.push(dto.category); }
-    if (dto.notes !== undefined)    { fields.push('notes = ?');    values.push(dto.notes); }
+    if (dto.amount !== undefined)   { fields.push(`amount = $${index++}`); values.push(dto.amount); }
+    if (dto.type !== undefined)     { fields.push(`type = $${index++}`); values.push(dto.type); }
+    if (dto.category !== undefined) { fields.push(`category = $${index++}`); values.push(dto.category); }
+    if (dto.notes !== undefined)    { fields.push(`notes = $${index++}`); values.push(dto.notes); }
     if (dto.date !== undefined) {
       const date = typeof dto.date === 'object'
         ? (dto.date as unknown as Date).toISOString().split('T')[0]
         : dto.date;
-      fields.push('date = ?');
+      fields.push(`date = $${index++}`);
       values.push(date);
     }
 
     if (fields.length === 0) {
-      return this.getById(id);
+      return await this.getById(id);
     }
 
-    fields.push("updated_at = datetime('now')");
+    fields.push('updated_at = NOW()');
     values.push(id);
 
-    db.prepare(`UPDATE transactions SET ${fields.join(', ')} WHERE id = ?`).run(...values);
-    return this.getById(id);
+    await db.query(`UPDATE transactions SET ${fields.join(', ')} WHERE id = $${index}`, values);
+    return await this.getById(id);
   }
 
   /** Soft delete — sets is_deleted = 1 */
-  delete(id: string): void {
+  async delete(id: string): Promise<void> {
     const db = getDb();
-    const existing = db
-      .prepare('SELECT id FROM transactions WHERE id = ? AND is_deleted = 0')
-      .get(id);
+    const existing = await db.query(
+      'SELECT id FROM transactions WHERE id = $1 AND is_deleted = FALSE',
+      [id]
+    );
 
-    if (!existing) {
+    if (!existing.rowCount) {
       throw Object.assign(new Error('Transaction not found.'), { status: 404 });
     }
 
-    db.prepare(`
-      UPDATE transactions SET is_deleted = 1, updated_at = datetime('now') WHERE id = ?
-    `).run(id);
+    await db.query(
+      'UPDATE transactions SET is_deleted = TRUE, updated_at = NOW() WHERE id = $1',
+      [id]
+    );
   }
 
   // ─── Private helpers ────────────────────────────────────────────────────────
 
   private buildWhereClause(filters: TransactionFilters): { whereClause: string; params: unknown[] } {
-    const conditions: string[] = ['is_deleted = 0'];
+    const conditions: string[] = ['is_deleted = FALSE'];
     const params: unknown[] = [];
 
     if (filters.type) {
-      conditions.push('type = ?');
+      conditions.push(`type = $${params.length + 1}`);
       params.push(filters.type);
     }
 
     if (filters.category) {
-      conditions.push('category = ?');
+      conditions.push(`category = $${params.length + 1}`);
       params.push(filters.category);
     }
 
     if (filters.date_from) {
-      conditions.push('date >= ?');
+      conditions.push(`date >= $${params.length + 1}`);
       params.push(filters.date_from);
     }
 
     if (filters.date_to) {
-      conditions.push('date <= ?');
+      conditions.push(`date <= $${params.length + 1}`);
       params.push(filters.date_to);
     }
 
     if (filters.search) {
-      conditions.push('(category LIKE ? OR notes LIKE ?)');
+      conditions.push(`(category ILIKE $${params.length + 1} OR notes ILIKE $${params.length + 2})`);
       const pattern = `%${filters.search}%`;
       params.push(pattern, pattern);
     }

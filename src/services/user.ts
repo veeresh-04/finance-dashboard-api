@@ -11,14 +11,17 @@ function toPublic(user: User): UserPublic {
 }
 
 export class UserService {
-  listUsers(page = 1, limit = 20): PaginatedResult<UserPublic> {
+  async listUsers(page = 1, limit = 20): Promise<PaginatedResult<UserPublic>> {
     const db = getDb();
     const offset = (page - 1) * limit;
 
-    const total = (db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number }).count;
-    const users = db
-      .prepare('SELECT * FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?')
-      .all(limit, offset) as User[];
+    const totalResult = await db.query('SELECT COUNT(*)::int as count FROM users');
+    const total = (totalResult.rows[0] as { count: number }).count;
+    const userResult = await db.query(
+      'SELECT * FROM users ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+      [limit, offset]
+    );
+    const users = userResult.rows as User[];
 
     return {
       data: users.map(toPublic),
@@ -31,9 +34,10 @@ export class UserService {
     };
   }
 
-  getUserById(id: string): UserPublic {
+  async getUserById(id: string): Promise<UserPublic> {
     const db = getDb();
-    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as User | undefined;
+    const userResult = await db.query('SELECT * FROM users WHERE id = $1', [id]);
+    const user = userResult.rows[0] as User | undefined;
 
     if (!user) {
       throw Object.assign(new Error('User not found.'), { status: 404 });
@@ -45,8 +49,8 @@ export class UserService {
   async createUser(dto: CreateUserDTO): Promise<UserPublic> {
     const db = getDb();
 
-    const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(dto.email);
-    if (existing) {
+    const existing = await db.query('SELECT id FROM users WHERE email = $1', [dto.email]);
+    if (existing.rowCount) {
       throw Object.assign(new Error('Email already in use.'), { status: 409 });
     }
 
@@ -54,56 +58,58 @@ export class UserService {
     const password_hash = await bcrypt.hash(dto.password, SALT_ROUNDS);
     const role = dto.role ?? Role.VIEWER;
 
-    db.prepare(`
+    await db.query(`
       INSERT INTO users (id, name, email, password_hash, role)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(id, dto.name, dto.email, password_hash, role);
+      VALUES ($1, $2, $3, $4, $5)
+    `, [id, dto.name, dto.email, password_hash, role]);
 
-    return this.getUserById(id);
+    return await this.getUserById(id);
   }
 
-  updateUser(id: string, dto: UpdateUserDTO): UserPublic {
+  async updateUser(id: string, dto: UpdateUserDTO): Promise<UserPublic> {
     const db = getDb();
 
-    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as User | undefined;
+    const userResult = await db.query('SELECT * FROM users WHERE id = $1', [id]);
+    const user = userResult.rows[0] as User | undefined;
     if (!user) {
       throw Object.assign(new Error('User not found.'), { status: 404 });
     }
 
     if (dto.email && dto.email !== user.email) {
-      const conflict = db.prepare('SELECT id FROM users WHERE email = ? AND id != ?').get(dto.email, id);
-      if (conflict) {
+      const conflict = await db.query('SELECT id FROM users WHERE email = $1 AND id != $2', [dto.email, id]);
+      if (conflict.rowCount) {
         throw Object.assign(new Error('Email already in use.'), { status: 409 });
       }
     }
 
     const fields: string[] = [];
     const values: unknown[] = [];
+    let index = 1;
 
-    if (dto.name !== undefined)      { fields.push('name = ?');      values.push(dto.name); }
-    if (dto.email !== undefined)     { fields.push('email = ?');     values.push(dto.email); }
-    if (dto.role !== undefined)      { fields.push('role = ?');      values.push(dto.role); }
-    if (dto.is_active !== undefined) { fields.push('is_active = ?'); values.push(dto.is_active ? 1 : 0); }
+    if (dto.name !== undefined)      { fields.push(`name = $${index++}`); values.push(dto.name); }
+    if (dto.email !== undefined)     { fields.push(`email = $${index++}`); values.push(dto.email); }
+    if (dto.role !== undefined)      { fields.push(`role = $${index++}`); values.push(dto.role); }
+    if (dto.is_active !== undefined) { fields.push(`is_active = $${index++}`); values.push(dto.is_active); }
 
     if (fields.length === 0) {
       return toPublic(user);
     }
 
-    fields.push("updated_at = datetime('now')");
+    fields.push('updated_at = NOW()');
     values.push(id);
 
-    db.prepare(`UPDATE users SET ${fields.join(', ')} WHERE id = ?`).run(...values);
-    return this.getUserById(id);
+    await db.query(`UPDATE users SET ${fields.join(', ')} WHERE id = $${index}`, values);
+    return await this.getUserById(id);
   }
 
-  deleteUser(id: string): void {
+  async deleteUser(id: string): Promise<void> {
     const db = getDb();
-    const user = db.prepare('SELECT id FROM users WHERE id = ?').get(id);
+    const user = await db.query('SELECT id FROM users WHERE id = $1', [id]);
 
-    if (!user) {
+    if (!user.rowCount) {
       throw Object.assign(new Error('User not found.'), { status: 404 });
     }
 
-    db.prepare('DELETE FROM users WHERE id = ?').run(id);
+    await db.query('DELETE FROM users WHERE id = $1', [id]);
   }
 }

@@ -11,14 +11,14 @@ Backend API for a finance dashboard system with role-based access control, trans
 - Dashboard summary APIs for totals, category breakdowns, recent activity, and trends
 - Request validation and structured error responses
 - Swagger UI for API exploration
-- Integration tests with in-memory SQLite
+- Integration tests with in-memory Postgres via `pg-mem`
 
 ## Tech Stack
 
 - Node.js
 - TypeScript
 - Express
-- SQLite via `better-sqlite3`
+- PostgreSQL via `pg`
 - Jest + Supertest
 - Swagger (`swagger-jsdoc` + `swagger-ui-express`)
 
@@ -67,7 +67,7 @@ PORT=3000
 NODE_ENV=development
 JWT_SECRET=dev-secret-key-do-not-use-in-production
 JWT_EXPIRES_IN=7d
-DB_PATH=./data/finance.db
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/finance_dashboard
 ```
 
 ### 3. Run in development
@@ -107,13 +107,11 @@ npx jest --runInBand --forceExit --detectOpenHandles
 
 ## Data Persistence
 
-The app uses SQLite for persistence. By default, the database file is stored at:
+The app uses PostgreSQL for persistence.
 
-```text
-./data/finance.db
-```
-
-Tests use an in-memory SQLite database.
+- Local/dev uses the `DATABASE_URL` connection string you provide
+- Free deployment works well with hosted Postgres providers such as Supabase
+- Tests use an in-memory Postgres-compatible database via `pg-mem`
 
 ## Validation and Error Handling
 
@@ -135,11 +133,14 @@ Error responses follow a consistent JSON shape:
 
 ## Assumptions and Tradeoffs
 
-- SQLite was chosen for simplicity and local portability.
+- PostgreSQL was chosen to make cloud deployment practical on free platforms.
 - Public registration is limited to viewer accounts for safer access control.
 - Tokens are checked against the current database user state on protected requests, so deactivated users lose access immediately.
 - Monthly dashboard trends default to the last 12 months, but respect explicit `date_from` and `date_to` filters when provided.
 
 ## Deployment Note
 
-This project works well locally with SQLite, but cloud deployment is easier with a hosted Postgres database if you want a free platform without persistent local disk support.
+Recommended free deployment:
+
+- Database: Supabase Postgres
+- API host: Render free web service

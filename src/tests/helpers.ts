@@ -1,20 +1,23 @@
-import { initDb, closeDb } from '../db/database';
-import { getDb } from '../db/database';
+import { initDb, closeDb, getDb } from '../db/database';
 import { createApp } from '../app';
 import { Application } from 'express';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { signToken } from '../utils/jwt';
 import { Role, User } from '../models/types';
+import { newDb } from 'pg-mem';
+import { Pool } from 'pg';
 
-export function setupTestApp(): Application {
-  // Use in-memory SQLite for tests
-  initDb(':memory:');
+export async function setupTestApp(): Promise<Application> {
+  const mem = newDb();
+  const adapter = mem.adapters.createPg();
+  const pool = new adapter.Pool() as Pool;
+  await initDb(pool);
   return createApp();
 }
 
-export function teardownTestApp(): void {
-  closeDb();
+export async function teardownTestApp(): Promise<void> {
+  await closeDb();
 }
 
 type SeedUserInput = {
@@ -32,12 +35,13 @@ export async function seedTestUser(input: SeedUserInput): Promise<{ token: strin
   const role = input.role ?? Role.VIEWER;
   const isActive = input.is_active ?? true;
 
-  db.prepare(`
+  await db.query(`
     INSERT INTO users (id, name, email, password_hash, role, is_active)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(id, input.name, input.email, passwordHash, role, isActive ? 1 : 0);
+    VALUES ($1, $2, $3, $4, $5, $6)
+  `, [id, input.name, input.email, passwordHash, role, isActive]);
 
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as User;
+  const userResult = await db.query('SELECT * FROM users WHERE id = $1', [id]);
+  const user = userResult.rows[0] as User;
   const token = signToken({ userId: user.id, role: user.role });
 
   return { token, user };

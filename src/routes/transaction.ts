@@ -54,7 +54,7 @@ router.get(
   '/',
   listTransactionValidator,
   handleValidationErrors,
-  (req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
     try {
       const filters: TransactionFilters = {
         type: req.query.type as TransactionFilters['type'],
@@ -65,7 +65,7 @@ router.get(
         page: req.query.page ? Number(req.query.page) : 1,
         limit: req.query.limit ? Number(req.query.limit) : 20,
       };
-      sendSuccess(res, txService.list(filters));
+      sendSuccess(res, await txService.list(filters));
     } catch (err: unknown) {
       const e = err as Error & { status?: number };
       sendError(res, e.status ?? 500, 'Error', e.message);
@@ -90,9 +90,9 @@ router.get(
  *       404:
  *         description: Not found
  */
-router.get('/:id', (req: Request, res: Response) => {
+router.get('/:id', async (req: Request, res: Response) => {
   try {
-    sendSuccess(res, txService.getById(req.params.id));
+    sendSuccess(res, await txService.getById(req.params.id));
   } catch (err: unknown) {
     const e = err as Error & { status?: number };
     sendError(res, e.status ?? 500, 'Error', e.message);
@@ -129,9 +129,9 @@ router.post(
   requireRole(Role.ADMIN),
   createTransactionValidator,
   handleValidationErrors,
-  (req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
     try {
-      const tx = txService.create(req.body, req.user!.userId);
+      const tx = await txService.create(req.body, req.user!.userId);
       sendSuccess(res, tx, 201);
     } catch (err: unknown) {
       const e = err as Error & { status?: number };
@@ -164,9 +164,9 @@ router.patch(
   requireRole(Role.ADMIN),
   updateTransactionValidator,
   handleValidationErrors,
-  (req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
     try {
-      sendSuccess(res, txService.update(req.params.id, req.body));
+      sendSuccess(res, await txService.update(req.params.id, req.body));
     } catch (err: unknown) {
       const e = err as Error & { status?: number };
       sendError(res, e.status ?? 500, 'Error', e.message);
@@ -196,9 +196,9 @@ router.patch(
 router.delete(
   '/:id',
   requireRole(Role.ADMIN),
-  (req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
     try {
-      txService.delete(req.params.id);
+      await txService.delete(req.params.id);
       res.status(204).send();
     } catch (err: unknown) {
       const e = err as Error & { status?: number };

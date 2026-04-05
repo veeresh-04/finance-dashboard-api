@@ -47,9 +47,9 @@ router.get(
     query('date_to').optional().isISO8601().withMessage('date_to must be a valid ISO date.'),
   ],
   handleValidationErrors,
-  (req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
     try {
-      const summary = dashboardService.getSummary(
+      const summary = await dashboardService.getSummary(
         req.query.date_from as string | undefined,
         req.query.date_to as string | undefined
       );
