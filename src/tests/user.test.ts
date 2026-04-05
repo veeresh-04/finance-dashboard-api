@@ -1,6 +1,7 @@
 import request from 'supertest';
-import { setupTestApp, teardownTestApp } from './helpers';
+import { setupTestApp, teardownTestApp, seedTestUser } from './helpers';
 import { Application } from 'express';
+import { Role } from '../models/types';
 
 describe('User Routes', () => {
   let app: Application;
@@ -11,15 +12,21 @@ describe('User Routes', () => {
   beforeAll(async () => {
     app = setupTestApp();
 
-    const adminRes = await request(app).post('/api/v1/auth/register').send({
-      name: 'Admin', email: 'admin@users.com', password: 'password123', role: 'admin',
+    const adminRes = await seedTestUser({
+      name: 'Admin',
+      email: 'admin@users.com',
+      password: 'password123',
+      role: Role.ADMIN,
     });
-    adminToken = adminRes.body.token;
+    adminToken = adminRes.token;
 
-    const viewerRes = await request(app).post('/api/v1/auth/register').send({
-      name: 'Viewer', email: 'viewer@users.com', password: 'password123', role: 'viewer',
+    const viewerRes = await seedTestUser({
+      name: 'Viewer',
+      email: 'viewer@users.com',
+      password: 'password123',
+      role: Role.VIEWER,
     });
-    viewerToken = viewerRes.body.token;
+    viewerToken = viewerRes.token;
   });
 
   afterAll(() => {

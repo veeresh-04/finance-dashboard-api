@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { AuthService } from '../services/auth';
 import { authenticate } from '../middleware/auth';
-import { registerValidator, loginValidator } from '../validators/auth';
+import { publicRegisterValidator, loginValidator } from '../validators/auth';
 import { handleValidationErrors } from '../middleware/validate';
 import { sendSuccess, sendError } from '../utils/response';
 
@@ -12,7 +12,7 @@ const authService = new AuthService();
  * @swagger
  * /auth/register:
  *   post:
- *     summary: Register a new user
+ *     summary: Register a new viewer account
  *     tags: [Auth]
  *     security: []
  *     requestBody:
@@ -26,10 +26,9 @@ const authService = new AuthService();
  *               name:    { type: string, example: Alice Smith }
  *               email:   { type: string, example: alice@example.com }
  *               password: { type: string, example: securepass123 }
- *               role:    { type: string, enum: [viewer, analyst, admin] }
  *     responses:
  *       201:
- *         description: User created, returns JWT token and user object
+ *         description: Viewer account created, returns JWT token and user object
  *       409:
  *         description: Email already in use
  *       422:
@@ -37,7 +36,7 @@ const authService = new AuthService();
  */
 router.post(
   '/register',
-  registerValidator,
+  publicRegisterValidator,
   handleValidationErrors,
   async (req: Request, res: Response) => {
     try {

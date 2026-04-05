@@ -32,7 +32,7 @@ export class AuthService {
 
     const password_hash = await bcrypt.hash(dto.password, SALT_ROUNDS);
     const id = uuidv4();
-    const role = dto.role ?? Role.VIEWER;
+    const role = Role.VIEWER;
 
     db.prepare(`
       INSERT INTO users (id, name, email, password_hash, role)

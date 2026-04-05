@@ -1,6 +1,7 @@
 import request from 'supertest';
-import { setupTestApp, teardownTestApp } from './helpers';
+import { setupTestApp, teardownTestApp, seedTestUser } from './helpers';
 import { Application } from 'express';
+import { Role } from '../models/types';
 
 describe('Dashboard Routes', () => {
   let app: Application;
@@ -10,15 +11,21 @@ describe('Dashboard Routes', () => {
   beforeAll(async () => {
     app = setupTestApp();
 
-    const adminRes = await request(app).post('/api/v1/auth/register').send({
-      name: 'Admin', email: 'admin@dash.com', password: 'password123', role: 'admin',
+    const adminRes = await seedTestUser({
+      name: 'Admin',
+      email: 'admin@dash.com',
+      password: 'password123',
+      role: Role.ADMIN,
     });
-    adminToken = adminRes.body.token;
+    adminToken = adminRes.token;
 
-    const viewerRes = await request(app).post('/api/v1/auth/register').send({
-      name: 'Viewer', email: 'viewer@dash.com', password: 'password123', role: 'viewer',
+    const viewerRes = await seedTestUser({
+      name: 'Viewer',
+      email: 'viewer@dash.com',
+      password: 'password123',
+      role: Role.VIEWER,
     });
-    viewerToken = viewerRes.body.token;
+    viewerToken = viewerRes.token;
 
     // Seed some transactions
     const transactions = [
@@ -94,6 +101,9 @@ describe('Dashboard Routes', () => {
       // Only Feb transactions: income 3000, expense 500
       expect(res.body.total_income).toBe(3000);
       expect(res.body.total_expenses).toBe(500);
+      expect(res.body.monthly_trends).toEqual([
+        { month: '2024-02', income: 3000, expenses: 500, net: 2500 },
+      ]);
     });
 
     it('category totals are sorted by amount descending', async () => {

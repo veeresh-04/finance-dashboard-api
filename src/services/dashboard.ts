@@ -21,6 +21,14 @@ export class DashboardService {
     if (dateTo)   { dateConditions.push('date <= ?'); dateParams.push(dateTo); }
 
     const dateWhere = `WHERE ${dateConditions.join(' AND ')}`;
+    const trendConditions = [...dateConditions];
+    const trendParams = [...dateParams];
+
+    if (!dateFrom && !dateTo) {
+      trendConditions.push("date >= date('now', '-12 months')");
+    }
+
+    const trendWhere = `WHERE ${trendConditions.join(' AND ')}`;
 
     // ── Totals ──────────────────────────────────────────────────────────────
     const totals = db.prepare(`
@@ -60,11 +68,10 @@ export class DashboardService {
         COALESCE(SUM(CASE WHEN type = 'income'  THEN amount ELSE 0 END), 0) AS income,
         COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) AS expenses
       FROM transactions
-      WHERE is_deleted = 0
-        AND date >= date('now', '-12 months')
+      ${trendWhere}
       GROUP BY month
       ORDER BY month ASC
-    `).all() as { month: string; income: number; expenses: number }[];
+    `).all(...trendParams) as { month: string; income: number; expenses: number }[];
 
     const monthly_trends: MonthlyTrend[] = monthlyRaw.map((r) => ({
       month: r.month,

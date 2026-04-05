@@ -1,9 +1,11 @@
 import request from 'supertest';
-import { setupTestApp, teardownTestApp } from './helpers';
+import { setupTestApp, teardownTestApp, seedTestUser } from './helpers';
 import { Application } from 'express';
+import { Role } from '../models/types';
 
 describe('Auth Routes', () => {
   let app: Application;
+  let adminToken: string;
 
   beforeAll(() => {
     app = setupTestApp();
@@ -17,10 +19,19 @@ describe('Auth Routes', () => {
     name: 'Admin User',
     email: 'admin@test.com',
     password: 'password123',
-    role: 'admin',
   };
 
   let authToken: string;
+
+  beforeAll(async () => {
+    const admin = await seedTestUser({
+      name: 'Existing Admin',
+      email: 'existing-admin@test.com',
+      password: 'password123',
+      role: Role.ADMIN,
+    });
+    adminToken = admin.token;
+  });
 
   describe('POST /api/v1/auth/register', () => {
     it('should register a new user and return a token', async () => {
@@ -28,6 +39,7 @@ describe('Auth Routes', () => {
       expect(res.status).toBe(201);
       expect(res.body).toHaveProperty('token');
       expect(res.body.user.email).toBe(adminUser.email);
+      expect(res.body.user.role).toBe('viewer');
       expect(res.body.user).not.toHaveProperty('password_hash');
       authToken = res.body.token;
     });
@@ -46,6 +58,13 @@ describe('Auth Routes', () => {
       const res = await request(app)
         .post('/api/v1/auth/register')
         .send({ name: 'Test', email: 'new@test.com', password: '123' });
+      expect(res.status).toBe(422);
+    });
+
+    it('should reject attempts to choose a role during public registration', async () => {
+      const res = await request(app)
+        .post('/api/v1/auth/register')
+        .send({ name: 'Test', email: 'admin-attempt@test.com', password: 'password123', role: 'admin' });
       expect(res.status).toBe(422);
     });
   });
@@ -93,6 +112,26 @@ describe('Auth Routes', () => {
         .get('/api/v1/auth/me')
         .set('Authorization', 'Bearer invalidtoken');
       expect(res.status).toBe(401);
+    });
+
+    it('should reject access for a user deactivated after token issuance', async () => {
+      const seededUser = await seedTestUser({
+        name: 'Deactivated Later',
+        email: 'inactive-after-login@test.com',
+        password: 'password123',
+        role: Role.VIEWER,
+      });
+
+      const deactivateRes = await request(app)
+        .patch(`/api/v1/users/${seededUser.user.id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ is_active: false });
+      expect(deactivateRes.status).toBe(200);
+
+      const res = await request(app)
+        .get('/api/v1/auth/me')
+        .set('Authorization', `Bearer ${seededUser.token}`);
+      expect(res.status).toBe(403);
     });
   });
 });

@@ -1,7 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { verifyToken } from '../utils/jwt';
-import { Role, ROLE_HIERARCHY, AuthPayload } from '../models/types';
+import { Role, ROLE_HIERARCHY, AuthPayload, User } from '../models/types';
 import { sendError } from '../utils/response';
+import { getDb } from '../db/database';
 
 // Augment Express Request to carry the authenticated user
 declare global {
@@ -27,7 +28,23 @@ export function authenticate(req: Request, res: Response, next: NextFunction): v
   const token = authHeader.slice(7);
 
   try {
-    req.user = verifyToken(token);
+    const payload = verifyToken(token);
+    const db = getDb();
+    const user = db
+      .prepare('SELECT id, role, is_active FROM users WHERE id = ?')
+      .get(payload.userId) as Pick<User, 'id' | 'role' | 'is_active'> | undefined;
+
+    if (!user) {
+      sendError(res, 401, 'Unauthorized', 'User no longer exists.');
+      return;
+    }
+
+    if (!user.is_active) {
+      sendError(res, 403, 'Forbidden', 'Account is deactivated.');
+      return;
+    }
+
+    req.user = { userId: user.id, role: user.role };
     next();
   } catch {
     sendError(res, 401, 'Unauthorized', 'Invalid or expired token.');

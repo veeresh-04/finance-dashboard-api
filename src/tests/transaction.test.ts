@@ -1,6 +1,7 @@
 import request from 'supertest';
-import { setupTestApp, teardownTestApp } from './helpers';
+import { setupTestApp, teardownTestApp, seedTestUser } from './helpers';
 import { Application } from 'express';
+import { Role } from '../models/types';
 
 describe('Transaction Routes', () => {
   let app: Application;
@@ -12,23 +13,29 @@ describe('Transaction Routes', () => {
   beforeAll(async () => {
     app = setupTestApp();
 
-    // Register admin
-    const adminRes = await request(app).post('/api/v1/auth/register').send({
-      name: 'Admin', email: 'admin@tx.com', password: 'password123', role: 'admin',
+    const adminRes = await seedTestUser({
+      name: 'Admin',
+      email: 'admin@tx.com',
+      password: 'password123',
+      role: Role.ADMIN,
     });
-    adminToken = adminRes.body.token;
+    adminToken = adminRes.token;
 
-    // Register viewer
-    const viewerRes = await request(app).post('/api/v1/auth/register').send({
-      name: 'Viewer', email: 'viewer@tx.com', password: 'password123', role: 'viewer',
+    const viewerRes = await seedTestUser({
+      name: 'Viewer',
+      email: 'viewer@tx.com',
+      password: 'password123',
+      role: Role.VIEWER,
     });
-    viewerToken = viewerRes.body.token;
+    viewerToken = viewerRes.token;
 
-    // Register analyst
-    const analystRes = await request(app).post('/api/v1/auth/register').send({
-      name: 'Analyst', email: 'analyst@tx.com', password: 'password123', role: 'analyst',
+    const analystRes = await seedTestUser({
+      name: 'Analyst',
+      email: 'analyst@tx.com',
+      password: 'password123',
+      role: Role.ANALYST,
     });
-    analystToken = analystRes.body.token;
+    analystToken = analystRes.token;
   });
 
   afterAll(() => {
