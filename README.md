@@ -1,36 +1,91 @@
 # Finance Dashboard API
 
-Backend API for a finance dashboard system with role-based access control, transaction management, dashboard summaries, and Swagger documentation.
+Backend API for a finance dashboard system with role-based access control, financial record management, dashboard analytics, validation, and API documentation.
 
-## Features
+## Links
 
-- JWT-based authentication
-- Role-based access control for `viewer`, `analyst`, and `admin`
-- User management with active/inactive status
-- Transaction CRUD with filtering, pagination, and soft delete
-- Dashboard summary APIs for totals, category breakdowns, recent activity, and trends
-- Request validation and structured error responses
-- Swagger UI for API exploration
-- Integration tests with in-memory Postgres via `pg-mem`
+- Live API: https://finance-dashboard-api-xd9i.onrender.com
+- Swagger Docs: https://finance-dashboard-api-xd9i.onrender.com/api-docs
+- Health Check: https://finance-dashboard-api-xd9i.onrender.com/health
+- GitHub Repository: https://github.com/veeresh-04/finance-dashboard-api
+
+## Project Summary
+
+This project was built as a backend assignment focused on backend architecture, API design, business logic, access control, and maintainability.
+
+The system supports:
+
+- user registration and authentication
+- role-based access control for `viewer`, `analyst`, and `admin`
+- user lifecycle management with active/inactive status
+- financial transaction CRUD operations
+- filtering, pagination, and soft-delete support
+- dashboard summary analytics such as totals, category breakdowns, recent activity, and trends
+- Swagger API documentation
+- integration tests
 
 ## Tech Stack
 
 - Node.js
 - TypeScript
 - Express
-- PostgreSQL via `pg`
-- Jest + Supertest
-- Swagger (`swagger-jsdoc` + `swagger-ui-express`)
+- PostgreSQL
+- Supabase Postgres
+- Render
+- Jest
+- Supertest
+- Swagger
 
 ## Role Model
 
-- `viewer`: can read dashboard data and transaction records
-- `analyst`: can read dashboard data and transaction records
-- `admin`: full access to user management and transaction management
+- `viewer`: can read dashboard summaries and transaction data
+- `analyst`: can read dashboard summaries and transaction data
+- `admin`: can manage users and fully manage financial records
 
 Public self-registration always creates a `viewer` account. Elevated roles can only be assigned by an admin.
 
-## API Highlights
+## Core Features
+
+### 1. User and Role Management
+
+- create and manage users
+- assign roles
+- activate or deactivate users
+- block unauthorized actions using backend middleware
+
+### 2. Financial Records Management
+
+- create transactions
+- list transactions
+- get transaction by ID
+- update transactions
+- soft-delete transactions
+- filter by type, category, date range, and search term
+- paginate transaction listings
+
+### 3. Dashboard Summary APIs
+
+- total income
+- total expenses
+- net balance
+- category-wise aggregates
+- monthly trends
+- recent transactions
+
+### 4. Access Control
+
+- JWT-based authentication
+- middleware-based authorization
+- role hierarchy enforcement
+- inactive users lose access to protected routes immediately
+
+### 5. Validation and Error Handling
+
+- request validation using `express-validator`
+- consistent JSON error responses
+- proper HTTP status codes such as `401`, `403`, `404`, `409`, and `422`
+
+## API Overview
 
 Base API path: `/api/v1`
 
@@ -41,7 +96,7 @@ Main route groups:
 - `/transactions`
 - `/dashboard`
 
-Useful public endpoints:
+Useful public routes:
 
 - `GET /`
 - `GET /health`
@@ -56,9 +111,9 @@ Useful public endpoints:
 npm install
 ```
 
-### 2. Create environment file
+### 2. Configure environment variables
 
-Copy `.env.example` to `.env` and adjust values if needed.
+Create a `.env` file based on `.env.example`.
 
 Example:
 
@@ -67,61 +122,51 @@ PORT=3000
 NODE_ENV=development
 JWT_SECRET=dev-secret-key-do-not-use-in-production
 JWT_EXPIRES_IN=7d
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/finance_dashboard
+DATABASE_URL=postgresql://username:password@host:5432/database
 ```
 
-### 3. Run in development
+### 3. Run locally
 
 ```bash
 npm run dev
 ```
 
-### 4. Open the API
-
-- App root: `http://localhost:3000/`
-- Health check: `http://localhost:3000/health`
-- Swagger UI: `http://localhost:3000/api-docs`
-
-## Production Build
+### 4. Build for production
 
 ```bash
 npm run build
 npm start
 ```
 
-In production, `JWT_SECRET` must be explicitly set.
-
 ## Testing
 
-Run the test suite:
+Run the full test suite:
 
 ```bash
 npm test
 ```
 
-If your environment blocks Jest worker processes, this also works:
+If worker processes are restricted in your environment:
 
 ```bash
 npx jest --runInBand --forceExit --detectOpenHandles
 ```
 
-## Data Persistence
+## Deployment
 
-The app uses PostgreSQL for persistence.
+This project is deployed on:
 
-- Local/dev uses the `DATABASE_URL` connection string you provide
-- Free deployment works well with hosted Postgres providers such as Supabase
-- Tests use an in-memory Postgres-compatible database via `pg-mem`
+- Supabase for PostgreSQL database hosting
+- Render for backend hosting
 
-## Validation and Error Handling
+Environment variables required in production:
 
-- invalid input returns `422`
-- unauthenticated requests return `401`
-- forbidden actions return `403`
-- missing resources return `404`
-- duplicate email conflicts return `409`
+- `NODE_ENV=production`
+- `JWT_SECRET=<secure-random-secret>`
+- `JWT_EXPIRES_IN=7d`
+- `DATABASE_URL=<supabase-session-pooler-url>`
 
-Error responses follow a consistent JSON shape:
+## Validation and Error Response Example
 
 ```json
 {
@@ -133,14 +178,18 @@ Error responses follow a consistent JSON shape:
 
 ## Assumptions and Tradeoffs
 
-- PostgreSQL was chosen to make cloud deployment practical on free platforms.
-- Public registration is limited to viewer accounts for safer access control.
-- Tokens are checked against the current database user state on protected requests, so deactivated users lose access immediately.
-- Monthly dashboard trends default to the last 12 months, but respect explicit `date_from` and `date_to` filters when provided.
+- PostgreSQL was chosen over SQLite to make cloud deployment practical on free hosting platforms.
+- Public signup is intentionally restricted to viewer accounts for safer default access control.
+- User state is rechecked from the database on protected requests so deactivated users cannot continue using old tokens.
+- Monthly trends default to the last 12 months, but respect explicit date filters when provided.
 
-## Deployment Note
+## Submission Notes
 
-Recommended free deployment:
+This implementation emphasizes:
 
-- Database: Supabase Postgres
-- API host: Render free web service
+- clear route/service separation
+- backend-enforced permissions
+- maintainable TypeScript structure
+- predictable validation and error handling
+- test coverage for core flows
+- deployability with public API documentation
